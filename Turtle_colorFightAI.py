@@ -79,7 +79,7 @@ def guard(g,core,x,y,depth=0):
     closenessMod = maxDepth-depth
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
     goldMod = 5.0 if c.cellType == 'gold' else 1.0
-    score = goldMod*(closenessMod*closenessMod+timeMod*timeMod*timeMod*timeMod)
+    score = goldMod*(closenessMod*closenessMod+timeMod*timeMod*timeMod)
 
     dirs = []
     if c.owner == g.uid:
