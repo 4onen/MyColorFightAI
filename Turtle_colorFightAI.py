@@ -38,7 +38,7 @@ def ogle(g,core,x,y,depth=0):
     ownershipMod = 0.000000001 if c.owner == g.uid else 1.0
     coreMod = 0.1 if x==tc[0] and y==tc[1] else 1.0
     goldMod = 10.0 if c.cellType == 'gold' else 1.0
-    score = coreMod*ownershipMod*goldMod*(closenessMod*closenessMod*closenessMod*closenessMod+timeMod)
+    score = coreMod*ownershipMod*goldMod*(closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
 
     dirs = []
     if c.owner == g.uid:
@@ -201,10 +201,11 @@ if __name__ == '__main__':
                 print((success,err_code,err_msg))
                 continue
             
-            opt = random.randint(int(-cn),int(avgTT)*(len(cores)+1))
+            opt = random.randint(int(-cn),int(avgTT)*4*(len(cores)+1))
 
             if(opt<0): #Defend
                 defenseCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
+                defenseCore = random.sample(golds,1)[0] if (not cores) and golds else defenseCore
                 defenseCore = (weakestCell.x,weakestCell.y) if manhattanDist((weakestCell.x,weakestCell.y),defenseCore)<3 else defenseCore
                 (score,_,x,y) = guard(g,defenseCore,defenseCore[0],defenseCore[1])
                 if lastActed == (x,y):
