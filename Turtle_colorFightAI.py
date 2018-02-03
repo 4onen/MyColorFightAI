@@ -201,7 +201,7 @@ if __name__ == '__main__':
                 print((success,err_code,err_msg))
                 continue
             
-            opt = random.randint(int(-cn)*3*(len(cores)+1),int(avgTT))
+            opt = random.randint(int(-cn),int(avgTT)*(len(cores)+1))
 
             if(opt<0): #Defend
                 defenseCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
