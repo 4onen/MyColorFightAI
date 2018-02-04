@@ -25,7 +25,7 @@ def calcCenter(cells,num):
 #Takes (colorfight.Game, core@(x,y), current_x, current_y, opt_recursion_depth)
 #Returns (score,depth,x,y)
 def ogle(g,core,x,y,depth=0):
-    maxDepth = max(g.width,g.height)//2+1
+    maxDepth = max(g.width,g.height)//3+1
     if(depth>maxDepth):
         return (-200,x,y,depth)
 
@@ -37,8 +37,8 @@ def ogle(g,core,x,y,depth=0):
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
     ownershipMod = 0.000000001 if c.owner == g.uid else 1.0
     coreMod = 0.1 if x==tc[0] and y==tc[1] else 1.0
-    goldMod = 10.0 if c.cellType == 'gold' else 1.0
-    score = coreMod*ownershipMod*goldMod*(closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
+    goldMod = 20.0 if c.cellType == 'gold' else 1.0
+    score = coreMod*ownershipMod*goldMod*(closenessMod*closenessMod*closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
 
     dirs = []
     if c.owner == g.uid:
@@ -51,11 +51,17 @@ def ogle(g,core,x,y,depth=0):
                     dirs.append((1,0))
                 else:
                     dirs.append((-1,0))
+            else:
+                dirs.append((1,0))
+                dirs.append((-1,0))
             if(c.y!=tc[1]):
                 if(c.y>tc[0]):
                     dirs.append((0,1))
                 else: 
                     dirs.append((0,-1))
+            else:
+                dirs.append((0,1))
+                dirs.append((0,-1))
 
     recRets = [(score,depth,x,y)]
     for d in dirs:
@@ -139,7 +145,7 @@ if __name__ == '__main__':
             g.Refresh()
             
             cooldown = g.cdTime - g.currTime
-            if cooldown > 0:
+            if cooldown > 0.05:
                 time.sleep(cooldown/2)
                 continue
             print(cooldown,"   ",len(cores))
@@ -201,7 +207,8 @@ if __name__ == '__main__':
                 print((success,err_code,err_msg))
                 continue
             
-            opt = random.randint(int(-cn),int(avgTT)*4*(len(cores)+1))
+            opt = random.randint(int(-cn),int(avgTT)*(8*(len(cores)+1)))
+            print("If every cell got attacked at once, I'd be dead in ",avgTT," seconds")
 
             if(opt<0): #Defend
                 defenseCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
