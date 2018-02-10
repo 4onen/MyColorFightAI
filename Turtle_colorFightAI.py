@@ -25,7 +25,7 @@ def calcCenter(cells,num):
 #Takes (colorfight.Game, core@(x,y), current_x, current_y, opt_recursion_depth)
 #Returns (score,depth,x,y)
 def ogle(g,core,x,y,depth=0):
-    maxDepth = max(g.width,g.height)//3+1
+    maxDepth = max(g.width,g.height)//2+1
     if(depth>maxDepth):
         return (-200,x,y,depth)
 
@@ -33,41 +33,39 @@ def ogle(g,core,x,y,depth=0):
     c = g.GetCell(x,y)
     if(type(c)!=colorfight.Cell): return (-9999,x,y,depth)
     
-    closenessMod = maxDepth-depth
+    closenessMod = (maxDepth-depth)*2
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
     ownershipMod = 0.000000001 if c.owner == g.uid else 1.0
     coreMod = 0.1 if x==tc[0] and y==tc[1] else 1.0
     goldMod = 20.0 if c.cellType == 'gold' else 1.0
-    score = coreMod*ownershipMod*goldMod*(closenessMod*closenessMod*closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
+    threatMod = 10.0 if depth<2 and c.owner != g.uid else 0.1
+    score = coreMod*ownershipMod*threatMod*goldMod*(closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
 
     dirs = []
     if c.owner == g.uid:
-        if(depth<1):
-            dirs = [(-1,0),(1,0),(0,1),(0,-1)]
-        else:
-            dx,dy=0,0
-            if(c.x!=tc[0]):
-                if(c.x>tc[0]):
-                    dirs.append((1,0))
-                else:
-                    dirs.append((-1,0))
-            else:
+        if(c.x!=tc[0]):
+            if(c.x>tc[0]):
                 dirs.append((1,0))
-                dirs.append((-1,0))
-            if(c.y!=tc[1]):
-                if(c.y>tc[0]):
-                    dirs.append((0,1))
-                else: 
-                    dirs.append((0,-1))
             else:
+                dirs.append((-1,0))
+        else:
+            dirs.append((1,0))
+            dirs.append((-1,0))
+        if(c.y!=tc[1]):
+            if(c.y>tc[1]):
                 dirs.append((0,1))
+            else: 
                 dirs.append((0,-1))
+        else:
+            dirs.append((0,1))
+            dirs.append((0,-1))
+    random.shuffle(dirs)
 
     recRets = [(score,depth,x,y)]
     for d in dirs:
         recRet=ogle(g,core,x+d[0],y+d[1],depth+1)
         if goldMod > 1.1:
-            recRet = (recRet[0]*5.0,recRet[1],recRet[2],recRet[3])
+            recRet = (recRet[0]*3.0,recRet[1],recRet[2],recRet[3])
         recRets.append(recRet)
     return max(recRets)
 
@@ -82,10 +80,10 @@ def guard(g,core,x,y,depth=0):
     if(type(c)!=colorfight.Cell): return (-9999,x,y,depth)
     if(c.owner != g.uid): return (-201,x,y,depth)
     
-    closenessMod = maxDepth-depth
+    closenessMod = (maxDepth-depth)*2
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
     goldMod = 5.0 if c.cellType == 'gold' else 1.0
-    score = goldMod*(closenessMod*closenessMod+timeMod*timeMod*timeMod)
+    score = goldMod*(closenessMod*closenessMod+timeMod)
 
     dirs = []
     if c.owner == g.uid:
@@ -98,8 +96,9 @@ def guard(g,core,x,y,depth=0):
                     dirs.append((1,0))
                 else:
                     dirs.append((-1,0))
+
             if(c.y!=tc[1]):
-                if(c.y>tc[0]):
+                if(c.y>tc[1]):
                     dirs.append((0,1))
                 else: 
                     dirs.append((0,-1))
@@ -154,6 +153,13 @@ if __name__ == '__main__':
             #Build short-term memory
             totalTimeToTakeMe = 0
             weakestCell = None
+            numPlayers = len(g.users)
+            playerScores = map(lambda x: x.cellNum, g.users)
+            if playerScores:
+                avgScore = sum(playerScores)/float(numPlayers)
+            else:
+                avgScore = 0
+                maxScore = 0
             #Update long-term memory
             coresMoved = []
             #Cores
@@ -192,23 +198,35 @@ if __name__ == '__main__':
                     center = calcCenter(owned,cn)
                     center = (int(center[0]),int(center[1]))
                     for gold in golds:
-                        if manhattanDist(gold,center)<3:
-                            center = gold
-                            break
+                        if manhattanDist(gold,center)<4:
+                            gCell = g.GetCell(gold[0],gold[1])
+                            if gCell and gCell.owner == g.uid and (not gCell.isBase):
+                                center = gold
+                                break
                     centerC = g.GetCell(center[0],center[1])
-                    if centerC and centerC.owner==g.uid and (not centerC.isBase):
-                        response=g.BuildBase(center[0],center[1])
-                        (success,err_code,err_msg) = (response[0],response[1],response[2])
-                        if success:
-                            cores.add(center)
-                            print("!!!BASE BUILT!!! at ",center)
-                        else:
-                            print("!!!BASE... not built... at ",center)
+                    if centerC:
+                        dirs = [(-1,0),(1,0),(0,1),(0,-1)]
+                        safe = True
+                        for d in dirs:
+                            dCell = g.GetCell(center[0]+d[0],center[1]+d[1])
+                            safe = safe and ((not dCell) or (dCell.owner == g.uid))
+                        if safe and centerC.owner==g.uid and (not centerC.isBase):
+                            response=g.BuildBase(center[0],center[1])
+                            (success,err_code,err_msg) = (response[0],response[1],response[2])
+                            if success:
+                                cores.add(center)
+                                print("!!!BASE BUILT!!! at ",center)
+                            else:
+                                print("!!!BASE... not built... at ",center)
                 print((success,err_code,err_msg))
                 continue
             
-            opt = random.randint(int(-cn),int(avgTT)*(8*(len(cores)+1)))
-            print("If every cell got attacked at once, I'd be dead in ",avgTT," seconds")
+            if True:#cn > avgScore:
+                opt = random.randint(int(-cn),int(avgTT)*(16*(len(cores)+1)))
+                print("If every cell got attacked at once, I'd be dead in ",avgTT," seconds")
+            else:
+                opt = 1
+                print("I'm a bit worried being below average. I could die in ",avgTT," seconds")
 
             if(opt<0): #Defend
                 defenseCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
@@ -232,7 +250,8 @@ if __name__ == '__main__':
                     print("Failed to defend (",weakestCell.x,',',weakestCell.y,"):")
             else: #Attack
                 spreadingCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
-                (score,_,x,y) = ogle(g,spreadingCore,spreadingCore[0],spreadingCore[1])
+                (score,depth,x,y) = ogle(g,spreadingCore,spreadingCore[0],spreadingCore[1])
+                print("Spreading data:",(score,depth,x,y))
                 if lastActed == (x,y): 
                     lastActedTurns += 1
                     if(lastActedTurns > 8):
