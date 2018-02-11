@@ -22,10 +22,26 @@ def calcCenter(cells,num):
         cy += c[1]/num
     return (cx,cy)
 
+def gasterBlaster(g,enemyBaseCell):
+    dirs = [(-1,0),(1,0),(0,1),(0,-1)]
+    if type(enemyBaseCell) != colorfight.Cell: 
+        return False
+    target = enemyBaseCell.owner
+    tt = enemyBaseCell.takeTime
+    for d in dirs:
+        dc = g.GetCell(enemyBaseCell.x+d[0],enemyBaseCell.y+d[1])
+        if dc:
+            willTakeInTime = dc.isTaking and (dc.attacker==target) and (dc.finishTime-g.currTime<tt)
+            if dc.owner==target or (not dc.isBase) or willTakeInTime:
+                return False
+    return True
+
+
+
 #Takes (colorfight.Game, core@(x,y), current_x, current_y, opt_recursion_depth)
 #Returns (score,depth,x,y)
 def ogle(g,core,x,y,depth=0):
-    maxDepth = max(g.width,g.height)//2+1
+    maxDepth = max(g.width,g.height)
     if(depth>maxDepth):
         return (-200,x,y,depth)
 
@@ -35,11 +51,12 @@ def ogle(g,core,x,y,depth=0):
     
     closenessMod = (maxDepth-depth)*2
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
+    murderMod = 9999.0 if (c.isBase and gasterBlaster(g,c)) else 1.0
     ownershipMod = 0.000000001 if c.owner == g.uid else 1.0
     coreMod = 0.1 if x==tc[0] and y==tc[1] else 1.0
-    goldMod = 20.0 if c.cellType == 'gold' else 1.0
+    goldMod = 25.0 if c.cellType == 'gold' else 1.0
     threatMod = 10.0 if depth<2 and c.owner != g.uid else 0.1
-    score = coreMod*ownershipMod*threatMod*goldMod*(closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
+    score = murderMod*coreMod*ownershipMod*threatMod*goldMod*(closenessMod*closenessMod*closenessMod+timeMod*timeMod*timeMod)
 
     dirs = []
     if c.owner == g.uid:
@@ -64,14 +81,12 @@ def ogle(g,core,x,y,depth=0):
     recRets = [(score,depth,x,y)]
     for d in dirs:
         recRet=ogle(g,core,x+d[0],y+d[1],depth+1)
-        if goldMod > 1.1:
-            recRet = (recRet[0]*3.0,recRet[1],recRet[2],recRet[3])
         recRets.append(recRet)
     return max(recRets)
 
 
 def guard(g,core,x,y,depth=0):
-    maxDepth = max(g.width,g.height)//4+1
+    maxDepth = 1
     if(depth>maxDepth):
         return (-200,x,y,depth)
     
@@ -80,10 +95,10 @@ def guard(g,core,x,y,depth=0):
     if(type(c)!=colorfight.Cell): return (-9999,x,y,depth)
     if(c.owner != g.uid): return (-201,x,y,depth)
     
-    closenessMod = (maxDepth-depth)*2
+    closenessMod = maxDepth-depth*depth
     timeMod = 33.0 - c.takeTime if (not c.isTaking) else -10000.0
     goldMod = 5.0 if c.cellType == 'gold' else 1.0
-    score = goldMod*(closenessMod*closenessMod+timeMod)
+    score = goldMod*(closenessMod*closenessMod*closenessMod+timeMod)
 
     dirs = []
     if c.owner == g.uid:
@@ -106,8 +121,6 @@ def guard(g,core,x,y,depth=0):
     recRets = [(score,depth,x,y)]
     for d in dirs:
         recRet=ogle(g,core,x+d[0],y+d[1],depth+1)
-        if goldMod > 1.1:
-            recRet = (recRet[0]*3.0,recRet[1],recRet[2],recRet[3])
         recRets.append(recRet)
     return max(recRets)
 
@@ -121,7 +134,7 @@ if __name__ == '__main__':
     # stop your AI and continue from the last time you quit. 
     # If there's a token and the token is valid, JoinGame() will continue. If
     # not, you will join as a new player.
-    if g.JoinGame("4's Turtle"):
+    if g.JoinGame("Head&Shell"):
         #Long-term memory
         cores = set()
         owned = set()
@@ -135,8 +148,9 @@ if __name__ == '__main__':
             for y in range(g.height):
                 c = g.GetCell(x,y)
                 if c.owner == g.uid:
-                    cores.add((x,y))
                     owned.add((x,y))
+                    if c.isBase:
+                        cores.add((x,y))
                     if c.cellType == 'gold':
                         golds.add((x,y))
 
@@ -154,19 +168,15 @@ if __name__ == '__main__':
             totalTimeToTakeMe = 0
             weakestCell = None
             numPlayers = len(g.users)
-            playerScores = map(lambda x: x.cellNum, g.users)
-            if playerScores:
-                avgScore = sum(playerScores)/float(numPlayers)
-            else:
-                avgScore = 0
-                maxScore = 0
             #Update long-term memory
             coresMoved = []
             #Cores
             for s in cores:
                 c = g.GetCell(s[0],s[1])
-                if c and (c.owner!=g.uid or (not c.isBase)):
-                    coresMoved.append(s)
+                if c:
+                    totalTimeToTakeMe += c.takeTime
+                    if (c.owner!=g.uid or (not c.isBase)):
+                        coresMoved.append(s)
             if coresMoved:
                 for lc in coresMoved:
                     cores.remove(lc)
@@ -177,8 +187,7 @@ if __name__ == '__main__':
                 if c and (c.owner!=g.uid):
                     coresMoved.append(s)
                 else:
-                    totalTimeToTakeMe += c.takeTime
-                    if (weakestCell==None or c.takeTime < weakestCell.takeTime):
+                    if c and (weakestCell==None or c.takeTime < weakestCell.takeTime):
                         weakestCell = c
             if coresMoved:
                 for ls in coresMoved:
@@ -186,12 +195,12 @@ if __name__ == '__main__':
             del coresMoved
 
             cn = len(owned)
-            avgTT = totalTimeToTakeMe/cn
+            avgTT = totalTimeToTakeMe/(len(cores)+1)
 
             success = False
             err_code = 9
             err_msg = 'No request sent???'
-            #Choose
+            #Base Building?
             if delayCount > 9:
                 delayCount = 0
                 if len(cores)<3 and len(cores)<(cn%10):
@@ -221,17 +230,24 @@ if __name__ == '__main__':
                 print((success,err_code,err_msg))
                 continue
             
-            if True:#cn > avgScore:
-                opt = random.randint(int(-cn),int(avgTT)*(16*(len(cores)+1)))
-                print("If every cell got attacked at once, I'd be dead in ",avgTT," seconds")
+            #Determine safety
+            safe = True
+            for c in cores:
+                if gasterBlaster(g,g.GetCell(c[0],c[1])):
+                    safe = False
+                    break
+
+            #Choose
+            if safe:
+                opt = 1#random.randint(int(-cn),int(avgTT)*(8*numPlayers*(len(cores)+1)))
+                print("If every core got attacked at once, I'd be dead in ",avgTT," seconds")
             else:
                 opt = 1
-                print("I'm a bit worried being below average. I could die in ",avgTT," seconds")
+                print("Shit! Knife fight! I might be dead in ",avgTT," seconds")
 
-            if(opt<0): #Defend
+            if opt<0: #Defend
                 defenseCore = random.sample(cores,1)[0] if cores else (weakestCell.x,weakestCell.y)
-                defenseCore = random.sample(golds,1)[0] if (not cores) and golds else defenseCore
-                defenseCore = (weakestCell.x,weakestCell.y) if manhattanDist((weakestCell.x,weakestCell.y),defenseCore)<3 else defenseCore
+                defenseCore = random.sample(golds,1)[0] if ((not cores) and golds) else defenseCore
                 (score,_,x,y) = guard(g,defenseCore,defenseCore[0],defenseCore[1])
                 if lastActed == (x,y):
                     lastActedTurns += 1
